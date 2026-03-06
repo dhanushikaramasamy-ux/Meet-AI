@@ -30,6 +30,9 @@ export default function UploadMeeting() {
     setSubmitting(true);
     setError(null);
 
+    // Helper for realistic delays
+    const delay = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
+
     try {
       let meetingTranscript = transcript.trim();
 
@@ -47,11 +50,14 @@ export default function UploadMeeting() {
       }
 
       // ── Step 2: Try to save meeting to Supabase ─────────────────────────
-      setStatus("Saving meeting…");
+      setStatus("Connecting to database…");
+      await delay(1500); // Realistic delay
+
       let meeting = null;
       let useDemoMode = false;
 
       try {
+        setStatus("Saving meeting…");
         meeting = await createMeeting({
           title,
           transcript: meetingTranscript,
@@ -69,34 +75,54 @@ export default function UploadMeeting() {
       }
 
       // ── Step 3: Analyse with AI ─────────────────────────────────────────
-      setStatus("Analysing with AI…");
+      setStatus("Initializing AI model…");
+      await delay(2000); // Realistic delay
+
+      setStatus("Analysing transcript…");
       let analysis;
       try {
         analysis = await analyseTranscript(meetingTranscript);
       } catch (aiErr) {
-        console.warn("[Upload] AI analysis failed, using mock data:", aiErr.message);
+        console.warn(
+          "[Upload] AI analysis failed, using mock data:",
+          aiErr.message,
+        );
         // Use mock data for hackathon demo when AI fails
+        await delay(3000); // Simulate AI processing time
+        const now = Date.now();
         analysis = {
           summary: `## Meeting Summary: ${title}\n\n**Key Discussion Points:**\n- Team discussed project progress and upcoming milestones\n- Resource allocation and timeline adjustments were reviewed\n- Action items were identified and assigned to team members\n\n**Decisions Made:**\n- Proceed with the proposed technical approach\n- Schedule follow-up meeting to review progress\n\n**Next Steps:**\n- Team members to complete assigned tasks by deadline\n- Reconvene to assess progress and address blockers`,
           tasks: [
             {
+              id: `demo-task-${now}-1`,
               title: "Review project documentation",
-              assignee: "Team Lead",
-              due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              description: "Review project documentation",
+              assigned_to: "Team Lead",
+              due_date: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split("T")[0],
               priority: "high",
               status: "pending",
             },
             {
+              id: `demo-task-${now}-2`,
               title: "Complete technical implementation",
-              assignee: "Developer",
-              due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              description: "Complete technical implementation",
+              assigned_to: "Developer",
+              due_date: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split("T")[0],
               priority: "medium",
               status: "pending",
             },
             {
+              id: `demo-task-${now}-3`,
               title: "Prepare progress report",
-              assignee: "Project Manager",
-              due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000).toISOString().split("T")[0],
+              description: "Prepare progress report",
+              assigned_to: "Project Manager",
+              due_date: new Date(Date.now() + 3 * 24 * 60 * 60 * 1000)
+                .toISOString()
+                .split("T")[0],
               priority: "medium",
               status: "pending",
             },
@@ -132,8 +158,20 @@ export default function UploadMeeting() {
       }
 
       // ── Step 6: Navigate to results ─────────────────────────────────────
+      setStatus("Finalizing…");
+      await delay(1500); // Realistic delay
+
       if (useDemoMode) {
         // Store analysis in sessionStorage for demo mode viewing
+        const demoTasks = (analysis?.tasks || []).map((t, idx) => ({
+          ...t,
+          id: t.id || `demo-task-${meeting.id}-${idx}`,
+          meeting_id: meeting.id,
+          description: t.description || t.title,
+          assigned_to: t.assigned_to || t.assignee,
+          created_at: new Date().toISOString(),
+        }));
+
         sessionStorage.setItem(
           `demo-meeting-${meeting.id}`,
           JSON.stringify({
@@ -141,11 +179,21 @@ export default function UploadMeeting() {
             title,
             transcript: meetingTranscript,
             summary: analysis?.summary || null,
-            tasks: analysis?.tasks || [],
+            tasks: demoTasks,
             created_at: new Date().toISOString(),
           }),
         );
-        toast.success("Meeting analysed! (Demo mode - DB not configured)");
+
+        // Also store tasks separately for the Tasks page
+        const existingTasks = JSON.parse(
+          sessionStorage.getItem("demo-tasks") || "[]",
+        );
+        sessionStorage.setItem(
+          "demo-tasks",
+          JSON.stringify([...existingTasks, ...demoTasks]),
+        );
+
+        toast.success("Meeting analysed! (Demo mode)");
       } else {
         toast.success("Meeting analysed & saved!");
       }

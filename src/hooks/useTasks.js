@@ -22,12 +22,23 @@ export default function useTasks(filters = {}) {
           setTimeout(() => reject(new Error("Fetch tasks timeout")), 8000),
         ),
       ]);
-      if (mountedRef.current) setTasks(data || []);
+
+      // Also load demo tasks from sessionStorage
+      const demoTasks = JSON.parse(
+        sessionStorage.getItem("demo-tasks") || "[]",
+      );
+      const allTasks = [...(data || []), ...demoTasks];
+
+      if (mountedRef.current) setTasks(allTasks);
     } catch (err) {
       console.warn("[useTasks] Could not fetch tasks:", err.message);
+      // Fall back to demo tasks only
+      const demoTasks = JSON.parse(
+        sessionStorage.getItem("demo-tasks") || "[]",
+      );
       if (mountedRef.current) {
-        setTasks([]);
-        setError(err.message);
+        setTasks(demoTasks);
+        if (demoTasks.length === 0) setError(err.message);
       }
     } finally {
       if (mountedRef.current) setLoading(false);
@@ -50,6 +61,19 @@ export default function useTasks(filters = {}) {
     setTasks((prev) =>
       prev.map((t) => (t.id === taskId ? { ...t, status: newStatus } : t)),
     );
+
+    // Check if it's a demo task
+    if (String(taskId).startsWith("demo-task-")) {
+      // Update in sessionStorage
+      const demoTasks = JSON.parse(
+        sessionStorage.getItem("demo-tasks") || "[]",
+      );
+      const updatedTasks = demoTasks.map((t) =>
+        t.id === taskId ? { ...t, status: newStatus } : t,
+      );
+      sessionStorage.setItem("demo-tasks", JSON.stringify(updatedTasks));
+      return;
+    }
 
     try {
       await updateTask(taskId, newStatus);
